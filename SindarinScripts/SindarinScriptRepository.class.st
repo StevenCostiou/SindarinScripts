@@ -69,6 +69,15 @@ SindarinScriptRepository >> stepBytecodeScript [
 	sindarin stepBytecode
 ]
 
+{ #category : #'steping - MKI' }
+SindarinScriptRepository >> stepIt [
+	"Executes the next instruction. If the instruction is a message-send, step inside it."
+	sindarin signalExceptionIfDebuggedExecutionHasSignalledUnhandledException.
+	sindarin signalExceptionIfDebuggedExecutionIsFinished.
+	sindarin debugSession stepItInto.
+   sindarin	stepHooks do: [ :aBlock | aBlock value ]
+]
+
 { #category : #stepping }
 SindarinScriptRepository >> stepOverScript [
 	sindarin stepOver
@@ -87,4 +96,21 @@ SindarinScriptRepository >> stepToMethodEntryScript [
 { #category : #stepping }
 SindarinScriptRepository >> stepToReturnScript [
 	sindarin stepToReturn
+]
+
+{ #category : #'steping - MKI' }
+SindarinScriptRepository >> stepUntilConditionIsTrue: aBlock [
+
+	"The recording mechanics is included here.. may not the best place"
+	self stDebugger removeSessionHolderSubscriptions.
+	aBlock whileFalse: [ 
+		| conditionValue |
+		conditionValue := aBlock value.
+		conditionValue ifFalse: [ 
+			sindarin stepIt.
+			self recordStep ].
+
+		conditionValue ].
+	self stDebugger setSessionHolderSubscriptions.
+	self stDebugger forceSessionUpdate
 ]
