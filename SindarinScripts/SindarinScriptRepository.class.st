@@ -20,9 +20,80 @@ Class {
 	#category : #SindarinScripts
 }
 
+{ #category : #skipping }
+SindarinScriptRepository >> breakOnAFamilyOfMethods [
+
+	[ sindarin isExecutionFinished ] whileFalse: [ 
+		(('.*open.*File.*' match: sindarin selector) and: [ 
+			 (sindarin context arguments at: 1) = 'myFile.txt' ]) ifTrue: [ 
+			sindarin setBreakpointOn: sindarin context sender method ].
+		sindarin step ]
+]
+
+{ #category : #skipping }
+SindarinScriptRepository >> controlFlowBreakpoint [
+
+	sindarin stepUntil: [ 
+		sindarin method = Object >> #trySaveAs: and: [ 
+			(sindarin context sender method = Object >> #actionPerformed:) not ] ]
+]
+
+{ #category : #skipping }
+SindarinScriptRepository >> controlFlowBreakpointOnStack [
+
+	sindarin stepUntil: [ 
+		sindarin method = Object >> #trySaveAs: and: [ 
+			(sindarin stack anySatisfy: [ :ctx | 
+				 ctx method = Object >> #actionPerformed: ]) not ] ]
+]
+
+{ #category : #skipping }
+SindarinScriptRepository >> divergenceStep [
+
+	| sindarin1 sindarin2 |
+	sindarin1 := SindarinDebugger debug: [ Object run ].
+	sindarin2 := SindarinDebugger debug: [ Object run ].
+	[ sindarin1 method = sindarin2 method ] whileFalse: [ 
+		sindarin1 step.
+		sindarin2 step ]
+]
+
 { #category : #initialize }
 SindarinScriptRepository >> initialize [
 	sindarin := SindarinDebugger new
+]
+
+{ #category : #skipping }
+SindarinScriptRepository >> objectCentricBreakpoint [
+
+	| bpoint atom drawer |
+	bpoint := sindarin setBreakpointOn: Object >> #displayAtom:.
+	bpoint whenHit: [ 
+		sindarin stepOver.
+		atom := sindarin messageReceiver.
+		drawer := sindarin messageArguments first.
+		(atom shape isCircular and: [ atom shape radius > 50 ]) ifTrue: [ 
+			sindarin haltOnCallTo: drawer.
+			bpoint remove ].
+		sindarin continue ]
+]
+
+{ #category : #skipping }
+SindarinScriptRepository >> objectReplay [
+
+	| bpoint atom drawer replayPoint drawerNode replayCondition |
+	bpoint := sindarin setBreakpointOn: Object >> #displayAtom:.
+	bpoint whenHit: [ 
+		drawerNode := sindarin node.
+		sindarin stepOver.
+		drawer := sindarin messageArguments first.
+		replayCondition ifTrue: [ 
+			bpoint remove.
+			replayPoint := sindarin setBreakpointOn: drawerNode.
+			replayPoint whenHit: [ 
+				sindarin skipWith: drawer.
+				sindarin continue ] ].
+		sindarin continue ]
 ]
 
 { #category : #skipping }
@@ -64,6 +135,13 @@ SindarinScriptRepository >> stepBatchAndReturnNodeHashAndStackSize [
 	^ nodesHashAndStackSize
 ]
 
+{ #category : #skipping }
+SindarinScriptRepository >> stepBeforeMessageSend [
+
+	sindarin stepUntil: [ 
+		sindarin node isMessage and: [ sindarin messageReceiver = nil ] ]
+]
+
 { #category : #stepping }
 SindarinScriptRepository >> stepBytecodeScript [
 	sindarin stepBytecode
@@ -88,14 +166,42 @@ SindarinScriptRepository >> stepScript [
 	sindarin step
 ]
 
+{ #category : #skipping }
+SindarinScriptRepository >> stepThroughPitons: anArray [
+
+	anArray do: [ :aMethod | 
+		sindarin stepUntil: [ sindarin method = aMethod ] ]
+]
+
 { #category : #stepping }
 SindarinScriptRepository >> stepToMethodEntryScript [
 	sindarin stepToMethodEntry
 ]
 
+{ #category : #skipping }
+SindarinScriptRepository >> stepToNextIteration [
+
+	| blockClosure lastCtx |
+	sindarin stepUntil: [ sindarin method = (Collection >> #collect:) ].
+	blockClosure := sindarin arguments first.
+	sindarin stepUntil: [ :ctx | 
+		lastCtx ~~ ctx and: [ ctx method = blockClosure ] ].
+	lastCtx := sindarin currentContext
+]
+
 { #category : #stepping }
 SindarinScriptRepository >> stepToReturnScript [
 	sindarin stepToReturn
+]
+
+{ #category : #skipping }
+SindarinScriptRepository >> stepUntilAssignment [
+
+	sindarin stepUntil: [ 
+		sindarin node isAssignment and: [ 
+			sindarin assignmentValue == 42 and: [ 
+				sindarin assignmentVariableName = #foo and: [ 
+					sindarin receiver isKindOf: Object ] ] ] ]
 ]
 
 { #category : #'steping - MKI' }
@@ -113,4 +219,13 @@ SindarinScriptRepository >> stepUntilConditionIsTrue: aBlock [
 		conditionValue ].
 	self stDebugger setSessionHolderSubscriptions.
 	self stDebugger forceSessionUpdate
+]
+
+{ #category : #skipping }
+SindarinScriptRepository >> stepUntilException [
+
+	sindarin stepUntil: [ 
+		sindarin node isMessage and: [ 
+			sindarin messageSelector = #signal and: [ 
+				sindarin messageReceiver isKindOf: Exception ] ] ]
 ]
