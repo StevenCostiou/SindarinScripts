@@ -23,8 +23,7 @@ SindarinScriptStepToNextInstanceCreation class >> defaultMaxDepth [
 
 { #category : #default }
 SindarinScriptStepToNextInstanceCreation class >> defaultName [
-	<toolbarExtensionDebugCommand: 50>
-	<codeExtensionDebugCommand: 50>
+	
 	^ 'Next instance creation'
 ]
 
